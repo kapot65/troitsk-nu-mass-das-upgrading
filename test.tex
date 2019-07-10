@@ -1,0 +1,461 @@
+% This file was converted to LaTeX by Writer2LaTeX ver. 1.6.1
+% see http://writer2latex.sourceforge.net for more info
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb,amsfonts,textcomp}
+\usepackage[T2A,T1]{fontenc}
+\usepackage[russian]{babel}
+\usepackage{array}
+\usepackage{supertabular}
+\usepackage{hhline}
+\makeatletter
+\newcommand\arraybslash{\let\\\@arraycr}
+\makeatother
+\setlength\tabcolsep{1mm}
+\renewcommand\arraystretch{1.3}
+\title{}
+\begin{document}
+Модернизированная система сбора
+
+При разработке новой системы сбора данных для установки Троицк ню-масс с целью увеличения продолжительности срока службы работы программного комплекса и упрощению поддержки и дальнейшей модернизации были сформулированы следующие паттерны разработки:
+
+\begin{itemize}
+\item Использование микросервисной архитектуры. Каждый самостоятельный, логически полный модуль системы должен быть реализован в виде отдельной программы (сервиса), которая выполняет только свою задачу и взаимодействует с другими модулями системы по TCP/IP протоколу используя стандартизированный формат сообщений. Такой подход инкапсулирует всю работу, связанную со взаимодействием с аппаратной частью в отдельные блоки, которые возможно разрабатывать параллельно и независимо друг от друга. Стандартизированный интерфейс взаимодействия обеспечивает легкость модернизации или замены модулей.
+\item Все сервисы должны иметь режим виртуального устройства. В этом режиме сервис должен запускаться на любом ПК и симулировать реальные ответы при запросе. Выполнение этого требования обеспечивает возможность тестирования отдельных элементов системы без включения всех остальных. Кроме того появляется возможность удаленной разработки комплекса. В случае установки Троицк ню-масс, где в качестве ПК для сервисов используются довольно слабые CCPC7, возможность разработки не непосредственно на используемой в эксперименте аппаратной части сильно увеличивает скорость разработки.
+\item Каждый сервис должен использовать только необходимую для работы информацию и не требовать дополнительных данных. Это должно максимально изолировать сервисы друг от друга и обеспечить независимость их работы. В процессе эксперимента могут появляться проблемы, такие как например неполадки в сети. При таких проблемах монолитные комплексы не смогут работать. Описанное требование призвано обеспечить возможность работы комплекса в условиях сбоев.
+\item Взаимодействие между сервисами должно обеспечиваться одной главной программой. Эта же программа должна предоставлять пользовательский интерфейс и возможность управления набором. Также, для обеспечения стабильности работы в случае поломки компьютера, программа должна быть мультиплатформенной и \ запускаться на всех ПК. Сформулированное требование вытекает из предыдущего пункта. Описанная программа инкапсулирует в себе все взаимодействие между сервисами т.о. обеспечивая независимость их работы.
+\item В отладочных целях, все сервисы и подпрограммы комплекса должны вести логи работы и сохранять их на жесткий диск. Все ошибки и предупреждения при наборе, в случае их появления, должны быть выведены пользователю.
+\end{itemize}
+С учетом изложенных требований для новой системы сбора данных была выбрана архитектура:
+
+[Warning: Draw object ignored]
+
+На схеме:
+
+\begin{itemize}
+\item API сервер модуля высокого напряжения - сервис, находящийся на \ CCPC7 стойки высокого напряжения. Отвечает за установку и коррекцию запирающего напряжения спектрометра.
+\item API сервер модуля детектора - сервис, находящийся на CCPC7 детекторной части установки. Отвечает за включение набора приходящих на детектор событий.
+\item GUI клиента - управляющая программа. Отвечает за запуск и управление сценариями набора данных, мониторингом системы набора и сохранением данных.
+\item Bash скрипты - \ набор скриптов, отвечающих за синхронизацию локальной БД с БД сервера данных.
+\end{itemize}
+
+\bigskip
+
+В качестве фреймворка разработки комплекса выбран Qt. Для устанавливаемых на CCPC7 серверов используется Qt 4.8. Для клиентской части используется версия Qt 5.4. Также используются дополнительные сторонние библиотеки QJson, QCustomPlot
+
+и easylogging++.
+
+
+\bigskip
+
+Код хранится в репозитории bibucket единым проектом.
+
+Общее для подмодулей комплекса
+
+Логирование
+
+Все модули используют в качестве логгера библиотеку easylogging++. Ее пресет находится в корне проекта в файле easylogging.pri. В конфигурационных файлах сервисов (.pro) логгер подключается командой:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+include(../common.pri )\\
+\end{supertabular}
+\end{flushleft}
+Также в main.cpp сервиса для корректной работы прописаны команды:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\#include {\textless}easylogging++.h{\textgreater}\newline
+\#include {\textless}common.h{\textgreater}\newline
+\newline
+// настройки логгера\newline
+\#ifdef EL\_CPP11\newline
+\ \ INITIALIZE\_EASYLOGGINGPP\newline
+\#else\newline
+\ \ \_INITIALIZE\_EASYLOGGINGPP\newline
+\#endif\newline
+\newline
+int main(int argc, char *argv[])\newline
+\{\newline
+\ \ setCodecs();\newline
+\ \ initLogging(argc, argv);\newline
+\ \ logModes();\\
+\end{supertabular}
+\end{flushleft}
+В пресетах common.pri содержится код для
+
+\begin{itemize}
+\item Инициализации логгера.
+\item Инициализации временной папки. Создаваемая временная папка в процессе работы сервиса мониторит свой размер и, при превышении порога, удаляет файлы в порядке их создания.
+\end{itemize}
+TCP
+
+В пресете tcp.pri, расположенном в папке tcp находится код для парсинга dataforge-envelope протокола а также коды TCP клиента и API сервера, работающего на этом протоколе. 
+
+
+\bigskip
+
+Обработка сообщений клиентом и сервером осуществляется с привязки сигналов
+
+\begin{itemize}
+\item receiveMessage - получение сообщение. В привязанном к этому сигналу слоте выполняется код по работе сервиса в соответствии с содержимым входного пакета. 
+\item sendMessage или sendRawMessage - отправка ответа
+\item error - отправка ошибки
+\end{itemize}
+
+\bigskip
+
+Такая абстракция позволяет инкапсулировать код по обработке транспортных протоколов в классе-предке и сосредоточиться только на обработке содержимого пакетов.
+
+Последовательность работы и подключения
+
+Все сервисы программного комплекса рассчитаны на длительное единоразовое подключение к сокету. После обработки команды сервисы не будут закрывать соединение с клиентом. 
+
+Т.к. логика работы набора данных подразумевает последовательное выполнение команд, в целях упрощения системы все сервисы рассчитаны только на строго последовательное выполнение команд. В случае, если в процессе обработки сервисом очередной команды поступит пакет с новой командой - в ответ на него сервер передаст ошибку :
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ \ {\textquotedbl}type{\textquotedbl}: {\textquotedbl}reply{\textquotedbl},\newline
+ \ \ {\textquotedbl}reply\_type{\textquotedbl}: {\textquotedbl}error{\textquotedbl},\newline
+ \ \ {\textquotedbl}error\_code{\textquotedbl}: {\textquotedbl}8{\textquotedbl},\newline
+ \ \ {\textquotedbl}block{\textquotedbl} : {\textquotedbl}1{\textquotedbl},\newline
+ \ \ {\textquotedbl}stage{\textquotedbl}: {\textquotedbl}check busy{\textquotedbl},\newline
+ \ \ {\textquotedbl}description{\textquotedbl}: {\textquotedbl}1 busy{\textquotedbl} \}\\
+\end{supertabular}
+\end{flushleft}
+Здесь error\_code - код ошибки, stage - стадия, на которой ошибка произошла, description - описание ошибки.
+
+Модуль детектора
+
+Общая схема работы сервиса
+
+[Warning: Draw object ignored]
+
+В целях достижения гибкости настройки адреса всех модулей камака могут быть заданы через конфигурационный файл, который считывается на стадии “чтение конфигурации”. В случае некорректной конфигурации приложение выведет соответствующие предупреждения в консоль.
+
+
+\bigskip
+
+Также, в целях дублирования во избежание потери данных при инициализации сервис создает временную папку, в которую будут записываться последние набранные файлы.
+
+Взаимодействие с КАМАК
+
+Сервис взаимодействует с модулями крейта по средствам API предустановленной в ОС CCPC7 библиотеки взаимодействия с КАМАК.
+
+
+\bigskip
+
+Основной задачей сервиса детекторного модуля является запуск записи событий на блоке КАМАК MADC и их считывание после набора. Полная последовательность команд КАМАК для набора событий за заданное время выглядит можно описать последовательностью:
+
+\begin{enumerate}
+\item TTL\_NIM, команда 0, 17, 0xFFFF - отключение TTL на MADC
+\item MADC, команда 0, 12, none - отключение набора на MADC
+\item MADC 0, 17, time - запись времени набора в MADC
+\item COUNTER1, команда 0..6, none - обнуление значений с 0 по 6 на первом каунтере
+\item COUNTER2, команда 0..6, none - обнуление значений с 0 по 6 на втором каунтере
+\item MADC, команда 0, 11, none - включение набора на MADC
+\item OV1, команда 0, 16, 0x1F - включение всех выходов на OV1, верхний канал
+\item OV1, команда 0, 16, 0x0F - включение всех выходов на OV1, нижний канал
+\item OV1, команда 0, 25, none - запуск OV1 в импульсном режиме. После этой команды начинается аппаратный набор событий
+\item Цикл опроса MADC - завершается при выставлении флагов завершения или переполнения
+
+\begin{enumerate}
+\item Ожидание 1 с
+\item MADC, команда 1, 1 - считывание количества набранных событий, \ флагов завершение набора или переполнения буфера
+\end{enumerate}
+\item MADC, команда 0, 12, none - отключение набора на MADC
+\item MADC, команда 1, 1 - считывание полного количества набранных событий
+\item Цикл чтения событий
+
+\begin{enumerate}
+\item MADC, 0, 0, none - считывание младших 2 байт времени события
+\item MADC, 1, 0, none - считывание старших 2 байт времени события
+\item MADC, 2, 0, none - считывание амплитуды и флага корректности события события
+\end{enumerate}
+\end{enumerate}
+
+\bigskip
+
+Также предоставляет метод API по инициализации крейта КАМАК, которая последовательно выполняет команды Z и C.
+
+Инициализация КАМАК
+
+Перед работой с сервисом необходимо проинициализировать крейт детектора. Для этого необходимо подключиться к серверному сокету сервиса и передать dataforge-envelope пакет с пустой бинарной частью и с следующими полями в корне метаданных:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ {\textquotedbl}command\_type{\textquotedbl} : {\textquotedbl}init{\textquotedbl},\newline
+ \ {\textquotedbl}type{\textquotedbl} : {\textquotedbl}command{\textquotedbl} \}\\
+\end{supertabular}
+\end{flushleft}
+Здесь type - тип пакета. Для всех команд значение этого поля должно быть “command”;
+
+command\_type - тип команды. В данном случае это код команды инициализации - “init”.
+
+
+\bigskip
+
+При получении команды сервис последовательно выполнить команды крейта Z и C. После выполнения сервис передаст ответ 
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ {\textquotedbl}type{\textquotedbl} : {\textquotedbl}reply{\textquotedbl},\newline
+ \ {\textquotedbl}reply\_type{\textquotedbl} : {\textquotedbl}init{\textquotedbl},\newline
+ \ {\textquotedbl}reseted{\textquotedbl} : {\textquotedbl}1{\textquotedbl},\newline
+ \ {\textquotedbl}status{\textquotedbl} : {\textquotedbl}ok{\textquotedbl} \}\\
+\end{supertabular}
+\end{flushleft}
+Здесь type - тип ответа. В системе сбора данных Троицк ню-масс для ответов это поле может иметь только значение reply, reply\_type - тип ответа, status - статус команды (практически для всех команд значение равно ok), reseted - флаг перезагрузки сервера (0 - если сервер проинициализирован в первый раз, 1 - в противном случае).
+
+Набор событий с детектора
+
+После инициализации крейта детектора, с помощью сервиса можно начать проводить набор событий, регистрируемых детектором. Для этого на сервис необходимо передать пакет с метаданными:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ \ {\textquotedbl}acquisition\_time{\textquotedbl} : {\textquotedbl}5{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}command\_type{\textquotedbl} : {\textquotedbl}acquire\_point{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}type{\textquotedbl} : {\textquotedbl}command{\textquotedbl},
+
+\ \ \ \ \ {\textquotedbl}split{\textquotedbl} : {\textquotedbl}true{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}external\_meta{\textquotedbl}: \{ {\textquotedbl}HV1\_value{\textquotedbl}: {\textquotedbl}-1{\textquotedbl}, \newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}HV2\_value{\textquotedbl}: {\textquotedbl}-1{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}acquisition\_time{\textquotedbl}: {\textquotedbl}5{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}point\_index{\textquotedbl}: {\textquotedbl}0{\textquotedbl} \} \}\\
+\end{supertabular}
+\end{flushleft}
+Здесь:
+
+\begin{itemize}
+\item acquisition\_time - Время набора в секундах.
+\item split - флаг разделения набора на поднаборы по 5 с. 
+\item external\_meta - Опциональный контейнер для внешних метаданных. Предназначен для сохранения информации о точке, полученной извне (например напряжение на спектрометре при наборе). Поле будет полностью скопировано в такой же тег в ответе.
+\end{itemize}
+При обработке такой команды сервис выполнит, описанную в подглаве “Взаимодействие с КАМАК” последовательность действий для набора событий в течение фиксированного времени. В случае, если в команде указывается флаг разделения набора, описанная последовательность будет выполнена несколько раз для времени 5 с и общим временным покрытием равным заданному времени набора. Производить набор с разделением следует в случае высокой скорости счета и больших желаемых времен набора, т.к. разделение позволяет избежать переполнение памяти MADC при наборе.
+
+
+\bigskip
+
+В случае набора без разделения сервис выдаст ответ по типу:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ \ \ {\textquotedbl}binary\_size{\textquotedbl}: {\textquotedbl}2345{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}end\_time{\textquotedbl}: {\textquotedbl}15:56:27.109{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}external\_meta{\textquotedbl}: \{ {\textquotedbl}HV1\_value{\textquotedbl}: {\textquotedbl}-1{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}HV2\_value{\textquotedbl}: {\textquotedbl}-1{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}acquisition\_time{\textquotedbl}: {\textquotedbl}5{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}point\_index{\textquotedbl}: {\textquotedbl}0{\textquotedbl} \},\newline
+ \ \ \ \ {\textquotedbl}format\_description{\textquotedbl}: {\textquotedbl}https://drive.google.com/open?id=1xh\_SF1k2F0leS-8apDR37x7-4b-YrQMlXkL4PMH-YxM{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}programm\_revision{\textquotedbl}: {\textquotedbl}1.59aa102{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}reply\_type{\textquotedbl}: {\textquotedbl}aquired\_point{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}start\_time{\textquotedbl}: {\textquotedbl}15:56:22.065{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}status{\textquotedbl}: {\textquotedbl}ok{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}time\_coeff{\textquotedbl}: 50,\newline
+ \ \ \ \ {\textquotedbl}total\_events{\textquotedbl}: {\textquotedbl}335{\textquotedbl},\newline
+ \ \ \ \ {\textquotedbl}type{\textquotedbl}: {\textquotedbl}reply{\textquotedbl} \}\\
+\end{supertabular}
+\end{flushleft}
+Здесь: binary\_size - размер полученных бинарных данных в байтах, start\_time - приблизительное время начала набора точки, end\_time - Приблизительное время окончания набора точки, time\_coeff - коэффициент преобразования из внутреннего времени в наносекунды, total\_events - количество сосчитанных событий в точке, external\_meta - контейнер для внешних метаданных, format\_description - ссылка на описание формата бинарных данных, programm\_revision - версия программы, с помощью которой набрана точка.
+
+Бинарные данные в ответном пакете будут содержать параметры событий в бинарном формате MADC.
+
+
+\bigskip
+
+Для набора с разделением ответное сообщение будет немного отличаться:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ \ {\textquotedbl}acquisition\_time{\textquotedbl}: 10,\newline
+ \ \ {\textquotedbl}binary\_size{\textquotedbl}: {\textquotedbl}455300{\textquotedbl},\newline
+ \ \ {\textquotedbl}end\_time{\textquotedbl}: [{\textquotedbl}2017-11-22T11:15:09{\textquotedbl}, {\textquotedbl}2017-11-22T11:15:15{\textquotedbl}],\newline
+ \ \ {\textquotedbl}events{\textquotedbl}: [ 32359, 32483 ],\newline
+ \ \ \ {\textquotedbl}external\_meta{\textquotedbl}: \{ {\textquotedbl}HV1\_value{\textquotedbl}: {\textquotedbl}-1{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}HV2\_value{\textquotedbl}: {\textquotedbl}-1{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}acquisition\_time{\textquotedbl}: {\textquotedbl}10{\textquotedbl},\newline
+ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\textquotedbl}point\_index{\textquotedbl}: {\textquotedbl}0{\textquotedbl} \},\newline
+ \ \ \ {\textquotedbl}format\_description{\textquotedbl}: {\textquotedbl}https://drive.google.com/open?id=1G2EQgzmAx\_BJCpg9xU\_fk3AEVWZ7J6VFio76ae6kOW4{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}programm\_revision{\textquotedbl}: {\textquotedbl}1.1.1-70-gd158942{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}reply\_type{\textquotedbl}: {\textquotedbl}aquired\_point{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}split{\textquotedbl}: true,\newline
+ \ \ \ {\textquotedbl}start\_time{\textquotedbl}: [ {\textquotedbl}2017-11-22T11:15:04{\textquotedbl}, {\textquotedbl}2017-11-22T11:15:09{\textquotedbl} ],\newline
+ \ \ \ {\textquotedbl}status{\textquotedbl}: {\textquotedbl}ok{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}time\_coeff{\textquotedbl}: 50,\newline
+ \ \ \ {\textquotedbl}total\_events{\textquotedbl}: {\textquotedbl}64842{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}type{\textquotedbl}: {\textquotedbl}reply{\textquotedbl} \}\\
+\end{supertabular}
+\end{flushleft}
+Из различий здесь start\_time и end\_time теперь имеют векторное значение соответствующее временам набора 5 секундных блоков и добавлено поле events соответствующее количеству событий в каждом блоке. Бинарная часть имеет такой же формат, что и в ответе на набор без разделения. По количеству событий в каждом из блоков можно восстановить отступы в бинарных данных.
+
+Модуль стойки высокого напряжения
+
+Схема работы сервиса:
+
+[Warning: Draw object ignored]
+
+Аппаратно, сервис соединяется с блоками питания с помощью:
+
+\begin{enumerate}
+\item ЦАП, управляемого через КАМАК и порта RS-232 самого БП для основного блока питания. Необходимость использования КАМАК для взаимодействия с ЦАП отсутвием другой аппаратной части, обеспечивающей задание значений необходимой битности. По сути КАМАК в этом сервисе используется только для программного управления ЦАП.
+\item Порта RS-232 для блока питания смещения.
+\end{enumerate}
+Порты RS-232 подключаются к CCPC7 через по USB через конвертеры.
+
+Аналогично к CCPC7 через RS-232 подключаются вольтметры.
+
+
+\bigskip
+
+Сервис может работать в 2-х режимах выставления напряжения:
+
+\begin{enumerate}
+\item Выставление напряжения через 2 блока питания. В таком режиме сначала выставляется базовое напряжение и затем с помощью первого блока питания через ЦАП и com порт БП. Затем от базового напряжения вычитается напряжение на втором блоке питания. Т.к. второй блок питания может изменять напряжения в пределах 1 кВ, такой режим подходит для проведения прецизионных измерений в небольшом диапазоне энергий.
+\item Выставление напряжения с помощью одного блока питания. Этот режим аналогичен предыдущему за исключением отсутствия второго шага и подходит для набора данных в широком диапазоне энергий.
+\end{enumerate}
+Необходимый режим работы сервиса можно задать через конфигурационный файл.
+
+
+\bigskip
+
+При запуске приложения, после чтения конфигурации сервис также как и в модуле детектора проводит инициализацию логгера и временной папки. Далее автоматически проводится инициализация КАМАК, при которой на вход ЦАП выставляется значение 0. Инициализация здесь происходит автоматически для минимизации рисков нежелательного выставления напряжения на блок питания, т.к. начальные значения при старте КАМАК отличны от нуля. Параллельно происходит инициализация вольтметров. В режиме работы с одним блоком питания инициализируется только один вольтметр - второй может быть использован вручную для сторонних измерений; в режиме с двумя БП- инициализируются оба вольтметра. После успешной инициализации вольтметров запускается отдельный программный поток, осуществляющий мониторинг и коррекцию выставленного напряжения.
+
+Коррекция напряжения
+
+В процессе эксплуатации системы выяснилось, что выставляемое через вольтметры напряжение в действительности задается с плавающей ошибкой порядка 7 В. \ Для устранения этой ошибки в работу сервиса был встроен алгоритм коррекции. Описать его можно следующей последовательностью.
+
+\begin{enumerate}
+\item При установке напряжения через ЦАП устанавливается основная часть напряжения - 100 В. Оставшиеся 100 В устанавливаются через RS-232 и обеспечивают запас для коррекции. 
+\item При измерении напряжений на вольтметре сервис записывает во внутренний буфер последние 3 измерения. 
+\item При каждом новом измерении напряжения на вольтметре, если разница между текущим и предыдущим измерениями оказывается меньше заданного порога (т.е. напряжение стабилизировано) и при этом измеренное напряжение отличается от желаемого - к 100 В, устанавливаемым через RS-232 добавляется или вычитается значение, равное разнице между измеренным и желаемым напряжениями.
+\end{enumerate}
+Описанный метод коррекции напряжения позволяет добиться стабильной точности при выставлении порядка десятых долей Вольта.
+
+Инициализация вольтметров
+
+Инициализация и управление вольтметрами происходит через RS-232 порт и описывается последовательностью действий:
+
+\begin{enumerate}
+\item Перевод вольтметра в режим программного контроля
+\item Выставление необходимой точности
+\item Выставление мода медленного изменения напряжения
+\item Выставление сопротивления 10 ГОм
+\item Выставление конфигурации для медленных измерений
+\end{enumerate}
+После сервис в цикле проводит последовательное чтение напряжения. Считанные данные отправляются клиенту, если он подключен, автоматически без запроса на измерение.
+
+Выставление напряжения
+
+После подключения, через сервис можно задать напряжение на блоке питания. Для этого по сокету необходимо отправить пакет, содержащий метаданные:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ \ {\textquotedbl}block{\textquotedbl}: {\textquotedbl}1{\textquotedbl},\newline
+ \ \ {\textquotedbl}command\_type{\textquotedbl} : {\textquotedbl}set\_voltage{\textquotedbl},\newline
+ \ \ {\textquotedbl}type{\textquotedbl} : {\textquotedbl}command{\textquotedbl},\newline
+ \ \ {\textquotedbl}voltage{\textquotedbl}: {\textquotedbl}16.1818{\textquotedbl} \}\\
+\end{supertabular}
+\end{flushleft}
+Здесь block - номер блока питания (1 - основной, 2 - блок смещения), voltage - желаемое напряжение в Вольтах.
+
+
+\bigskip
+
+После получения команды, сервис выставит через ЦАП и RS-232 необходимое напряжение и начнет проводить непрерывную коррекцию к заданному уровню. После выставления по каналу сокета будет передан ответ:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\{ \ {\textquotedbl}type{\textquotedbl}: {\textquotedbl}answer{\textquotedbl},\newline
+ \ \ {\textquotedbl}block{\textquotedbl} : {\textquotedbl}1{\textquotedbl},\newline
+ \ \ {\textquotedbl}answer\_type{\textquotedbl} : {\textquotedbl}set\_voltage{\textquotedbl},\newline
+ \ \ {\textquotedbl}status{\textquotedbl}: {\textquotedbl}ok{\textquotedbl} \}\\
+\end{supertabular}
+\end{flushleft}
+
+\bigskip
+
+Сервис также имеет возможность задания напряжения с ожиданием его выставления. Запрос такой команды немного отличается:
+
+\begin{flushleft}
+\tablefirsthead{}
+\tablehead{}
+\tabletail{}
+\tablelasttail{}
+\begin{supertabular}{m{6.19136in}}
+\ \{ \ {\textquotedbl}block{\textquotedbl}: {\textquotedbl}1{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}command\_type{\textquotedbl} : {\textquotedbl}set\_voltage\_and\_check{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}type{\textquotedbl} : {\textquotedbl}command{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}voltage{\textquotedbl}: {\textquotedbl}16.1818{\textquotedbl},\newline
+ \ \ \ {\textquotedbl}max\_error{\textquotedbl}: 5,\newline
+ \ \ \ {\textquotedbl}timeout{\textquotedbl} : 20 \}\\
+\end{supertabular}
+\end{flushleft}
+Здесь max\_error - допустимая ошибка в Вольтах, timeout - максимальное время ожидания в секундах.
+
+Ответ на команду придет только после того как измерения вольтметра будут совпадать с желаемым значениям в пределах погрешности.
+
+Управляющий модуль
+
+На клиентском компьютере, с которого осуществляется управление набором данных должен быть установлен управляющий программный комплекс системы сбора данных. Он состоит из GUI управления и GUI визуализации данных. Т.к. используемая при разработке библиотека QCustomPlot имеет утечку памяти, программу управления было решено разделить на 2 подпрограммы во избежания вылетов во время набора.
+
+
+\bigskip
+
+Управляющая программа позволяет:
+
+\begin{enumerate}
+\item Подключаться к сервису детектора и проводить набор событий за \ фиксированное время вручную.
+\item Подключаться к сервису высоковольтной стойки задавать и измерять напряжение на блоках питания вручную.
+\item Проводить серии наборов событий, регистрируемых детектором по сценарию. Шагами сценария могут быть:
+
+\begin{enumerate}
+\item Выставление напряжения на блоке питания спектрометра
+\item Выставление напряжения на блоке питания спектрометра с последующей проверкой показаний вольтметра
+\item Запись событий, регистрируемых детектором за фиксированное количество времени
+\item Второй и третий подпункты одновременно (набор точки)
+\end{enumerate}
+\item Для сценариев, содержащих только команды по набору точек возможен набор обратным проходом.
+\item Сценарий может быть выполнен несколько раз, в т.ч. с чередованием проходов
+\end{enumerate}
+\end{document}
